@@ -139,6 +139,26 @@ jobs:
           cache: false
           rustflags: ""
 
+      - name: Patch mini for gateway features
+        working-directory: source
+        run: |
+          set -euo pipefail
+          M=easytier-contrib/easytier-mini/src/main.rs
+          C=easytier-contrib/easytier-mini/Cargo.toml
+
+          # swap the compact factory for the full-featured one in main()
+          sed -i 's|    instance::factory::native_compact_instance_manager_with_runtime,|    instance::factory::{native_compact_instance_manager_with_runtime, native_instance_manager_with_runtime},|' "$M"
+          sed -i 's|Arc::new(native_compact_instance_manager_with_runtime(|Arc::new(native_instance_manager_with_runtime(|' "$M"
+
+          # enable gateway (subnet proxy + socks5 + port-forward), upnp, tcp hole punch, endpoint discovery
+          sed -i 's|"proxy-cidr-monitor",|"proxy-cidr-monitor",\n    "socks5",\n    "upnp",\n    "tcp-hole-punch",\n    "endpoint-discovery",|' "$C"
+
+          # fail loudly if upstream drifted and a sed no longer applies
+          grep -q 'instance::factory::{native_compact_instance_manager_with_runtime, native_instance_manager_with_runtime}' "$M"
+          grep -q 'Arc::new(native_instance_manager_with_runtime(' "$M"
+          grep -q '"socks5",' "$C"
+          echo "mini gateway patch applied and verified"
+
       - name: Test easytier-mini
         working-directory: source
         run: cargo test -p easytier-mini
@@ -150,73 +170,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-musl
-            runner: ubuntu-24.04
-            artifact: linux-x86_64
-            builder: cargo
           - target: aarch64-unknown-linux-musl
             runner: ubuntu-24.04-arm
             artifact: linux-aarch64
-            builder: cargo
-          - target: riscv64gc-unknown-linux-musl
-            runner: ubuntu-24.04
-            artifact: linux-riscv64
-            builder: zig
-          - target: loongarch64-unknown-linux-musl
-            runner: ubuntu-24.04
-            artifact: linux-loongarch64
-            builder: zig
-          - target: armv7-unknown-linux-musleabihf
-            runner: ubuntu-24.04
-            artifact: linux-armv7hf
-            builder: zig
-          - target: armv7-unknown-linux-musleabi
-            runner: ubuntu-24.04
-            artifact: linux-armv7
-            builder: zig
-          - target: arm-unknown-linux-musleabihf
-            runner: ubuntu-24.04
-            artifact: linux-armhf
-            builder: zig
-          - target: arm-unknown-linux-musleabi
-            runner: ubuntu-24.04
-            artifact: linux-arm
-            builder: zig
-          - target: mips-unknown-linux-musl
-            runner: ubuntu-24.04
-            artifact: linux-mips
-            builder: mips
-          - target: mipsel-unknown-linux-musl
-            runner: ubuntu-24.04
-            artifact: linux-mipsel
-            builder: mips
-          - target: x86_64-unknown-freebsd
-            runner: ubuntu-24.04
-            artifact: freebsd-14-x86_64
-            builder: zig
-          - target: x86_64-apple-darwin
-            runner: macos-latest
-            artifact: macos-x86_64
-            builder: cargo
-          - target: aarch64-apple-darwin
-            runner: macos-latest
-            artifact: macos-aarch64
             builder: cargo
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             artifact: windows-x86_64
             builder: cargo
             windows_arch: x86_64
-          - target: i686-pc-windows-msvc
-            runner: windows-latest
-            artifact: windows-i686
-            builder: cargo
-            windows_arch: i686
-          - target: aarch64-pc-windows-msvc
-            runner: windows-11-arm
-            artifact: windows-arm64
-            builder: cargo
-            windows_arch: arm64
     runs-on: ${{ matrix.runner }}
     env:
       TARGET: ${{ matrix.target }}
@@ -306,6 +268,26 @@ jobs:
             ar x libgcc.a _ctzsi2.o _clz.o _bswapsi2.o
             ar rcs libctz.a _ctzsi2.o _clz.o _bswapsi2.o
           )
+
+      - name: Patch mini for gateway features
+        working-directory: source
+        run: |
+          set -euo pipefail
+          M=easytier-contrib/easytier-mini/src/main.rs
+          C=easytier-contrib/easytier-mini/Cargo.toml
+
+          # swap the compact factory for the full-featured one in main()
+          sed -i 's|    instance::factory::native_compact_instance_manager_with_runtime,|    instance::factory::{native_compact_instance_manager_with_runtime, native_instance_manager_with_runtime},|' "$M"
+          sed -i 's|Arc::new(native_compact_instance_manager_with_runtime(|Arc::new(native_instance_manager_with_runtime(|' "$M"
+
+          # enable gateway (subnet proxy + socks5 + port-forward), upnp, tcp hole punch, endpoint discovery
+          sed -i 's|"proxy-cidr-monitor",|"proxy-cidr-monitor",\n    "socks5",\n    "upnp",\n    "tcp-hole-punch",\n    "endpoint-discovery",|' "$C"
+
+          # fail loudly if upstream drifted and a sed no longer applies
+          grep -q 'instance::factory::{native_compact_instance_manager_with_runtime, native_instance_manager_with_runtime}' "$M"
+          grep -q 'Arc::new(native_instance_manager_with_runtime(' "$M"
+          grep -q '"socks5",' "$C"
+          echo "mini gateway patch applied and verified"
 
       - name: Build easytier-mini
         working-directory: source
