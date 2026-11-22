@@ -16,6 +16,13 @@ on:
         required: true
         default: false
         type: boolean
+      platforms:
+        description: >-
+          Comma-separated platforms to build: all, linux-aarch64,
+          linux-armv7hf, windows-x86_64
+        required: false
+        default: all
+        type: string
 
 permissions:
   contents: read
@@ -34,6 +41,7 @@ jobs:
     outputs:
       source_sha: ${{ steps.source.outputs.sha }}
       source_version: ${{ steps.source.outputs.version }}
+      build_matrix: ${{ steps.platforms.outputs.matrix }}
     steps:
       - name: Validate release request
         env:
@@ -109,6 +117,58 @@ jobs:
           echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
           echo "version=$source_version" >> "$GITHUB_OUTPUT"
 
+      - name: Select build platforms
+        id: platforms
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          set -euo pipefail
+          declare -A selected=()
+          platforms="${PLATFORMS,,}"
+          platforms="${platforms// /}"
+          if [[ -z "$platforms" ]]; then
+            echo "platforms input must not be empty" >&2
+            exit 1
+          fi
+
+          IFS=',' read -ra tokens <<< "$platforms"
+          for token in "${tokens[@]}"; do
+            case "$token" in
+              all)
+                selected[linux-aarch64]=1
+                selected[linux-armv7hf]=1
+                selected[windows-x86_64]=1
+                ;;
+              linux-aarch64|linux-armv7hf|windows-x86_64)
+                selected["$token"]=1
+                ;;
+              *)
+                echo "Unsupported platform: '$token' (supported: all, linux-aarch64, linux-armv7hf, windows-x86_64)" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+          includes=()
+          for platform in linux-aarch64 linux-armv7hf windows-x86_64; do
+            [[ -n "${selected[$platform]:-}" ]] || continue
+            case "$platform" in
+              linux-aarch64)
+                includes+=('{"target":"aarch64-unknown-linux-musl","runner":"ubuntu-24.04-arm","artifact":"linux-aarch64","builder":"cargo"}')
+                ;;
+              linux-armv7hf)
+                includes+=('{"target":"armv7-unknown-linux-musleabihf","runner":"ubuntu-24.04","artifact":"linux-armv7hf","builder":"zig"}')
+                ;;
+              windows-x86_64)
+                includes+=('{"target":"x86_64-pc-windows-msvc","runner":"windows-latest","artifact":"windows-x86_64","builder":"cargo","windows_arch":"x86_64"}')
+                ;;
+            esac
+          done
+
+          matrix="{\"include\":[$(IFS=,; echo "${includes[*]}")]}"
+          echo "Selected platforms: ${!selected[*]}"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   test:
     runs-on: ubuntu-24.04
     needs: prepare
@@ -168,17 +228,7 @@ jobs:
     needs: [prepare, test]
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - target: aarch64-unknown-linux-musl
-            runner: ubuntu-24.04-arm
-            artifact: linux-aarch64
-            builder: cargo
-          - target: x86_64-pc-windows-msvc
-            runner: windows-latest
-            artifact: windows-x86_64
-            builder: cargo
-            windows_arch: x86_64
+      matrix: ${{ fromJSON(needs.prepare.outputs.build_matrix) }}
     runs-on: ${{ matrix.runner }}
     env:
       TARGET: ${{ matrix.target }}
