@@ -17,9 +17,7 @@ on:
         default: false
         type: boolean
       platforms:
-        description: >-
-          Comma-separated platforms to build: all, linux-aarch64,
-          linux-armv7hf, windows-x86_64
+        description: 'Comma-separated platforms to build: all, linux-aarch64, linux-armv7hf, windows-x86_64'
         required: false
         default: all
         type: string
